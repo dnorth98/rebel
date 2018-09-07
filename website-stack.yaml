@@ -43,7 +43,7 @@ Resources:
         DestinationBucketName:
           Fn::ImportValue:
             LogBucket
-        LogFilePrefix: !Sub www.${RootDomainName}
+        LogFilePrefix: !Sub www.${RootDomainName}/
 
   WWWBucket:
     Type: AWS::S3::Bucket
@@ -59,7 +59,7 @@ Resources:
         DestinationBucketName:
           Fn::ImportValue:
             LogBucket
-        LogFilePrefix: !Sub www.${RootDomainName}
+        LogFilePrefix: !Sub www.${RootDomainName}/
 
   siteDNS:
     Type: AWS::Route53::RecordSetGroup
