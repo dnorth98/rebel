@@ -1,0 +1,21 @@
+Parameters:
+  LogBucketName:
+    Description: Name for the logs bucket
+    Type: String
+
+Resources:
+  LogBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref LogBucketName
+      AccessControl: BucketOwnerFullControl
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: 404.html
+
+Outputs:
+  LogBucketName:
+    Value: !Ref LogBucket
+    Description: Logging Bucket Name
+    Export:
+      Name: LogBucket
