@@ -9,9 +9,11 @@ Resources:
     Properties:
       BucketName: !Ref LogBucketName
       AccessControl: LogDeliveryWrite
-      WebsiteConfiguration:
-        IndexDocument: index.html
-        ErrorDocument: 404.html
+      NotificationConfiguration:
+        LambdaConfigurations:
+          -
+            Event: "s3:ObjectCreated:*"
+            Function: !GetAtt LogProcessor.Arn
 
   IpAddressTrackingTable:
     Type: AWS::DynamoDB::Table
@@ -36,6 +38,142 @@ Resources:
       ProvisionedThroughput:
         ReadCapacityUnits: 2
         WriteCapacityUnits: 2
+
+  LambdaExecutionRole:
+      Type: AWS::IAM::Role
+      Properties:
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Principal: {Service: [lambda.amazonaws.com]}
+            Action: ['sts:AssumeRole']
+        Path: /
+        ManagedPolicyArns:
+          - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        Policies:
+          - PolicyName: S3AllowGet
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - 's3:Get*'
+                  Resource: !Sub "arn:aws:s3:::${LogBucketName}/*"
+          - PolicyName: DynamoAllowPutUpdate
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - 'dynamodb:put*'
+                    - 'dynamodb:update*'
+                  Resource: !GetAtt IpAddressTrackingTable.Arn
+
+  BucketPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref LogProcessor
+      Principal: s3.amazonaws.com
+      SourceAccount: !Ref "AWS::AccountId"
+      SourceArn: !Sub "arn:aws:s3:::${LogBucketName}"
+
+  LogProcessor:
+      Type: AWS::Lambda::Function
+      Properties:
+        Description: Read S3 access logs and write to DynamoDB
+        Handler: index.handler
+        Role: !GetAtt LambdaExecutionRole.Arn
+        Code:
+          ZipFile: !Sub |
+            import json
+            import boto3
+            import re
+
+            s3 = boto3.client('s3')
+            dynamo = boto3.client('dynamodb')
+
+            # Log parsing code from https://blog.kowalczyk.info/article/a1e/parsing-s3-log-files-in-python.html
+            s3_line_logpats  = r'(\S+) (\S+) \[(.*?)\] (\S+) (\S+) ' \
+                       r'(\S+) (\S+) (\S+) "([^"]+)" ' \
+                       r'(\S+) (\S+) (\S+) (\S+) (\S+) (\S+) ' \
+                       r'"([^"]+)" "([^"]+)"'
+
+            s3_line_logpat = re.compile(s3_line_logpats)
+
+            (S3_LOG_BUCKET_OWNER, S3_LOG_BUCKET, S3_LOG_DATETIME, S3_LOG_IP,
+            S3_LOG_REQUESTOR_ID, S3_LOG_REQUEST_ID, S3_LOG_OPERATION, S3_LOG_KEY,
+            S3_LOG_HTTP_METHOD_URI_PROTO, S3_LOG_HTTP_STATUS, S3_LOG_S3_ERROR,
+            S3_LOG_BYTES_SENT, S3_LOG_OBJECT_SIZE, S3_LOG_TOTAL_TIME,
+            S3_LOG_TURN_AROUND_TIME, S3_LOG_REFERER, S3_LOG_USER_AGENT) = range(17)
+
+            s3_names = ("bucket_owner", "bucket", "datetime", "ip", "requestor_id",
+            "request_id", "operation", "key", "http_method_uri_proto", "http_status",
+            "s3_error", "bytes_sent", "object_size", "total_time", "turn_around_time",
+            "referer", "user_agent")
+
+            def parse_s3_log_line(line):
+              match = s3_line_logpat.match(line)
+              result = [match.group(1+n) for n in range(17)]
+              return result
+
+            def get_s3_log_field(field_name, parsed):
+              for (name, val) in zip(s3_names, parsed):
+                if name == field_name:
+                  return val
+
+              return None
+
+            def dump_parsed_s3_line(parsed):
+              for (name, val) in zip(s3_names, parsed):
+                  print("%s: %s" % (name, val))
+
+            def handler(event,context):
+              print("Received event: " + json.dumps(event, indent=2))
+
+              bucket_name = event['Records'][0]['s3']['bucket']['name']
+              file_key = event['Records'][0]['s3']['object']['key']
+              print "Reading key " + file_key + " from bucket " + bucket_name
+
+              # The site is the prefix of the key
+              site = file_key.split('/', 1)[0]
+
+              # Get the access log file from S3
+              access_log_file = s3.get_object(Bucket=bucket_name, Key=file_key)
+
+              # read it
+              lines = access_log_file['Body'].read().split(b'\n')
+              for r in lines:
+                if r:
+                  print "r: " + r
+
+                  # break the log into it's relevant fields
+                  parsed = parse_s3_log_line(r)
+                  # dump_parsed_s3_line(parsed)
+
+                  # Get the ip address from the log
+                  ip_address = get_s3_log_field('ip', parsed)
+
+                  # If we have an IP, add it to dynamoDB while incrementing the counter
+                  if ip_address:
+                    print "IP found - incrementing count " + ip_address + " (" + site + ")"
+
+                    dynamo.update_item(
+                      TableName='ip_address_access_counts',
+                      Key={
+                        'ip_address': {'S': ip_address},
+                        'site': {'S': site}
+                      },
+                      UpdateExpression="ADD #counter :increment",
+                      ExpressionAttributeNames={'#counter': 'counter'},
+                      ExpressionAttributeValues={':increment': {'N': '1'}}
+                    )
+
+              return True
+        Timeout: 30
+        Runtime: python2.7
+
 Outputs:
   LogBucketName:
     Value: !Ref LogBucket
