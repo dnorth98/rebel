@@ -1,0 +1,12 @@
+Parameters:
+  ZoneDnsApex:
+    Description: Domain Name
+    Type: String
+
+Resources:
+  DNS:
+    Type: "AWS::Route53::HostedZone"
+    Properties:
+      HostedZoneConfig:
+        Comment: "Hosted zone for rebel test"
+      Name: !Ref ZoneDnsApex
