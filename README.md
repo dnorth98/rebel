@@ -21,3 +21,9 @@ This template is based on the [standard AWS example](https://docs.aws.amazon.com
 * Create N stacks using the website-stack template (one for each website you want to setup)
 
 Profit from the serverless web hosting joy!
+
+# A note on S3 log delivery
+
+[As documented by AWS](https://docs.aws.amazon.com/AmazonS3/latest/dev/ServerLogs.html), S3 log delivery to the configured bucket may take some time. In my own testing, the frequently took a while to show up in the bucket and of course, this delays the lambda function from firing to perform the tracking.
+
+> Server access log records are delivered on a best effort basis. Most requests for a bucket that is properly configured for logging result in a delivered log record. Most log records are delivered within a few hours of the time that they are recorded, but they can be delivered more frequently.
