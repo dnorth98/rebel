@@ -13,6 +13,22 @@ Resources:
         IndexDocument: index.html
         ErrorDocument: 404.html
 
+  IpAddressTrackingTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    Properties:
+      TableName: ip_address_access_counts
+      AttributeDefinitions:
+        -
+          AttributeName: "ip_address"
+          AttributeType: "S"
+      KeySchema:
+        -
+          AttributeName: "ip_address"
+          KeyType: "HASH"
+      ProvisionedThroughput:
+        ReadCapacityUnits: 2
+        WriteCapacityUnits: 2
 Outputs:
   LogBucketName:
     Value: !Ref LogBucket
