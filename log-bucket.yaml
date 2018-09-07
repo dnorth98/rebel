@@ -22,10 +22,17 @@ Resources:
         -
           AttributeName: "ip_address"
           AttributeType: "S"
+        -
+          AttributeName: "site"
+          AttributeType: "S"
       KeySchema:
         -
           AttributeName: "ip_address"
           KeyType: "HASH"
+        -
+          AttributeName: "site"
+          KeyType: "RANGE"
+
       ProvisionedThroughput:
         ReadCapacityUnits: 2
         WriteCapacityUnits: 2
