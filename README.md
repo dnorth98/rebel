@@ -1,6 +1,6 @@
 # Websites in a box
 
-This repo contains several AWS cloudformation templates to implement "serverless" web site hosting and some basics metrics gathering.  The solution is implemented as a few templates as follows:
+This repo contains several AWS cloudformation templates to implement "serverless" web site hosting and some basic metrics gathering.  The solution is implemented as a few templates as follows:
 
 # route53-zone.yaml
 This template creates a route53 zone.  It's only parameter is the root (apex) domain name for the zone to be created.  After creation you MUST delegate this zone for it to be usable.
